@@ -52,10 +52,10 @@ object Demo extends App {
 
     implicit val yearCodec: PlainCodec[Year] = implicitly[PlainCodec[Int]].map(new Year(_))(_.year)
 
-    val getBooks: Endpoint[(Option[Year], Option[Int]), (StatusCode, ErrorInfo), List[Book], Nothing] = endpoint
-      .get
+    val getBooks: Endpoint[(Option[Year], Option[Int]), (StatusCode, ErrorInfo), List[Book], Nothing] = endpoint.get
       .in("api" / "v1.0" / "books")
-      .in(query[Option[Year]]("year")).in(query[Option[Int]]("limit"))
+      .in(query[Option[Year]]("year"))
+      .in(query[Option[Int]]("limit"))
       .errorOut(statusCode.and(jsonBody[ErrorInfo]))
       .out(jsonBody[List[Book]])
   }
@@ -78,19 +78,16 @@ object Demo extends App {
 
     val booksQueryInput: EndpointInput[BooksQuery] = query[Option[Year]]("year").and(query[Option[Int]]("limit")).mapTo(BooksQuery)
 
-    val getBooks: Endpoint[BooksQuery, (StatusCode, ErrorInfo), List[Book], Nothing] = baseEndpoint
-      .get
+    val getBooks: Endpoint[BooksQuery, (StatusCode, ErrorInfo), List[Book], Nothing] = baseEndpoint.get
       .in("book")
       .in(booksQueryInput)
       .out(jsonBody[List[Book]].example(List(Database.books.head)))
 
-    val getBookCover: Endpoint[UUID, (StatusCode, ErrorInfo), Source[ByteString, Any], Source[ByteString, Any]] = baseEndpoint
-      .get
+    val getBookCover: Endpoint[UUID, (StatusCode, ErrorInfo), Source[ByteString, Any], Source[ByteString, Any]] = baseEndpoint.get
       .in("book" / path[UUID]("bookId") / "cover")
       .out(streamBody[Source[ByteString, Any]](schemaFor[Array[Byte]], MediaType.OctetStream()))
 
-    val addBook: Endpoint[(AuthToken, NewBook), (StatusCode, ErrorInfo), Unit, Nothing] = baseEndpoint
-      .post
+    val addBook: Endpoint[(AuthToken, NewBook), (StatusCode, ErrorInfo), Unit, Nothing] = baseEndpoint.post
       .in(auth.bearer)
       .in("book")
       .in(multipartBody[NewBook])
@@ -118,22 +115,23 @@ object Demo extends App {
 
     val getBookCoverRoute: Route = Endpoints.getBookCover.toRoute { bookId =>
       bookCovers.get(bookId) match {
-        case None => Future.successful(Left((StatusCodes.NotFound, ErrorInfo("Book not found"))))
+        case None                => Future.successful(Left((StatusCodes.NotFound, ErrorInfo("Book not found"))))
         case Some(bookCoverPath) => Future.successful(Right(FileIO.fromPath(bookCoverPath)))
       }
     }
 
-    val addBookRoute: Route = Endpoints.addBook.toRoute { case (authToken, newBook) =>
-      if (authToken == "secret") {
-        val book = Book(UUID.randomUUID(), newBook.title, newBook.year, Author(newBook.authorName, Country(newBook.authorCountry)))
-        books = books :+ book
-        newBook.cover.foreach { cover =>
-          bookCovers = bookCovers + (book.id -> cover)
+    val addBookRoute: Route = Endpoints.addBook.toRoute {
+      case (authToken, newBook) =>
+        if (authToken == "secret") {
+          val book = Book(UUID.randomUUID(), newBook.title, newBook.year, Author(newBook.authorName, Country(newBook.authorCountry)))
+          books = books :+ book
+          newBook.cover.foreach { cover =>
+            bookCovers = bookCovers + (book.id -> cover)
+          }
+          Future.successful(Right(()))
+        } else {
+          Future.successful(Left((StatusCodes.Unauthorized, ErrorInfo("Incorrect auth token"))))
         }
-        Future.successful(Right(()))
-      } else {
-        Future.successful(Left((StatusCodes.Unauthorized, ErrorInfo("Incorrect auth token"))))
-      }
     }
   }
 
