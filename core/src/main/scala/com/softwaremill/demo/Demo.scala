@@ -18,9 +18,11 @@ object Demo extends App {
 
   case class BooksQuery(year: Option[Year], limit: Option[Int])
 
-  case class ErrorInfo(error: String)
+  //
 
   type AuthToken = String
+
+  case class ErrorInfo(error: String)
 
   //
 
@@ -56,7 +58,8 @@ object Demo extends App {
       .in("api" / "v1.0" / "books")
       .in(query[Option[Year]]("year"))
       .in(query[Option[Int]]("limit"))
-      .errorOut(statusCode.and(jsonBody[ErrorInfo]))
+      .errorOut(statusCode)
+      .errorOut(jsonBody[ErrorInfo])
       .out(jsonBody[List[Book]])
   }
 
